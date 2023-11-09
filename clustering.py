@@ -6,6 +6,13 @@ from scipy.stats import multivariate_normal
 np.random.seed(1003)
 
 sigma = [0.5, 1, 2, 4, 8]
+CENTRES = np.array([[-1, -1], [1, -1], [0, 1]])
+obj_kmeans = []
+obj_gmm = []
+acc_kmeans = []
+acc_gmm = []
+
+labels = np.concatenate((np.array([0 for i in range(100)]), np.array([1 for i in range(100)]), np.array([2 for i in range(100)])))
 
 def load_data(sigma=1):
     mean1, cov1 = np.array([-1, -1]), sigma*np.array([[2, 0.5], [0.5, 1]])
@@ -28,8 +35,8 @@ def load_data(sigma=1):
 # data = load_data(0.01)
 
 class GMM():
-    def __init__(self, iters=100, num_clusters=3, data=None):
-        self.preds = None
+    def __init__(self, iters=400, num_clusters=3, data=None):
+        self.preds = []
         self.iters = iters
         self.clusters = num_clusters
         self.data = data
@@ -37,13 +44,13 @@ class GMM():
             raise ValueError('data cannot be None')
         self.w = np.ones(self.clusters)/np.ones(self.clusters).sum()
         self.means = np.random.uniform(low=-5, high=5, size=(self.clusters, self.data.shape[-1]))
-        self.covs = np.array([np.identity(self.data.shape[-1]) * np.random.uniform(0.1, high=5) + np.array([[0, 1], [1, 0]]) * np.random.uniform(-2, 2) for i in range(self.clusters)])
-        print(self.covs)
+        self.covs = np.array([np.identity(self.data.shape[-1]) * np.random.uniform(0.1, high=5) for i in range(self.clusters)]) # + np.array([[0, 1], [1, 0]]) * np.random.uniform(-2, 2)
+        # print(self.covs)
         self.soft_labels = np.zeros((self.data.shape[0], self.clusters))
         # print(self.means[0])
 
     def e_step(self):
-        print('e-step!')
+        # print('e-step!')
         for n in range(len(self.data)):
             temp_sum = 0
             for c in range(self.clusters):
@@ -54,7 +61,7 @@ class GMM():
             self.soft_labels[n, :] /= temp_sum
         
     def m_step(self):
-        print('m-step')
+        # print('m-step')
         temp_probs = self.soft_labels.sum(axis=0)
         for c in range(self.clusters):
             temp_mean = np.zeros(self.data.shape[-1])
@@ -73,7 +80,7 @@ class GMM():
         for iter in range(self.iters):
             self.e_step()
             self.m_step()
-            print('iters:', iter, 'nll:', self.nll())
+            # print('iters:', iter, 'nll:', self.nll())
 
     def nll(self):
         loglikelihood = 0
@@ -84,19 +91,37 @@ class GMM():
             loglikelihood += np.log(temp)
         return -loglikelihood
     
-data = load_data(0.1)
-# gmm = GMM(iters=300, data=data)
-# gmm.train()
-# print(gmm.means)
-# print(np.argmax(gmm.soft_labels, axis=1))
+    def accuracy(self):
+        for idx in range(len(self.data)):
+            # print(self.preds)
+            self.preds.append(0)
+            temp = np.inf
+            for c in range(len(CENTRES)):
+                dist = np.linalg.norm(self.means[np.argmax(self.soft_labels[idx])]-CENTRES[c])
+                if dist < temp:
+                    self.preds[idx] = c
+                    temp = dist
+        self.preds = np.array(self.preds)
+        accuracy = (self.preds == labels).sum() / len(labels)
+        return accuracy
+    
+    def objective(self):
+        obj = 0
+        for idx in range(len(self.data)):
+            obj =+ np.linalg.norm(self.data[idx]-self.means[np.argmax(self.soft_labels[idx])])**2
+        return obj
+
+
+    
 
 
 class KMeans():
-    def __init__(self, data, iters=500, k=3):
+    def __init__(self, data, iters=400, k=3):
         self.original_data = data
         self.iters = iters
         self.k = k
         self.load_data(data)
+        self.preds = []
 
     def load_data(self, data):
         self.data = {}
@@ -107,7 +132,7 @@ class KMeans():
         idx = np.random.randint(len(self.original_data), size=self.k)
         centres = self.original_data[idx]
         for iters in range(self.iters):
-            print('iter:', iters)
+            # print('iter:', iters)
             # assign clusters
             for idx in self.data:
                 temp = np.inf
@@ -123,14 +148,64 @@ class KMeans():
                     if (self.data[idx][1]==centres[c]).all():
                         temp.append(self.data[idx][0])
                 centres[c] = np.mean(np.array(temp), axis=0)
-        print('centres', centres)
+
+    def accuracy(self):
+        for idx in self.data:
+            # print(self.preds)
+            self.preds.append(0)
+            temp = np.inf
+            for c in range(len(CENTRES)):
+                dist = np.linalg.norm(self.data[idx][1]-CENTRES[c])
+                if dist < temp:
+                    self.preds[idx] = c
+                    temp = dist
+        self.preds = np.array(self.preds)
+        accuracy = (self.preds == labels).sum() / len(labels)
+        return accuracy
+    
+    def objective(self):
+        obj = 0
+        for idx in self.data:
+            obj =+ np.linalg.norm(self.data[idx][0]-self.data[idx][1])**2
+        return obj
 
 
 
 
 
-            
-            
+for s in sigma:
+    print('sigma =', s)
+    data = load_data(s)
+    gmm = GMM(data=data)
+    gmm.train()
+    acc_gmm.append(gmm.accuracy())
+    obj_gmm.append(gmm.objective())
 
-km = KMeans(data)
-km.train()
+    print('gmm acc', acc_gmm[-1])
+    print('gmm obj', obj_gmm[-1])
+        
+                
+
+    km = KMeans(data)
+    km.train()
+    acc_kmeans.append(km.accuracy())
+    obj_kmeans.append(km.objective())
+
+    print('kmeans acc', acc_kmeans[-1])
+    print('kmeans obj', obj_kmeans[-1])
+
+
+plt.plot(sigma, acc_gmm)
+plt.plot(sigma, acc_kmeans)
+plt.title('Clustering Accuracy')
+plt.xlabel('Sigma')
+plt.ylabel('Accuracy')
+plt.savefig('acc.pdf')
+plt.clf()
+
+plt.plot(sigma, obj_gmm)
+plt.plot(sigma, obj_kmeans)
+plt.title('Clustering Objective')
+plt.xlabel('Sigma')
+plt.ylabel('Objective')
+plt.savefig('obj.pdf')
