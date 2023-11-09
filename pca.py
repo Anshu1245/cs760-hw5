@@ -76,6 +76,7 @@ plt.xlabel('idx')
 plt.ylabel('eigen values')
 plt.title('Eigen values for decomposition of the X matrix')
 plt.savefig('d.pdf')
+plt.clf()
 
 buggy_pca(data2)
 demeaned_pca(data2)
